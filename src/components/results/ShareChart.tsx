@@ -1,0 +1,181 @@
+import type { CandidateShare } from '../../types/simulation';
+
+interface ShareChartProps {
+  shares: CandidateShare[];
+  seatLabel: string;
+  scopeLabel: string;
+}
+
+const PALETTE = [
+  '#3B82F6',
+  '#F59E0B',
+  '#10B981',
+  '#8B5CF6',
+  '#EC4899',
+  '#14B8A6',
+  '#EF4444',
+  '#EAB308',
+];
+
+const styles = `
+.chart {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.chart__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.chart__title { font-size: var(--fs-md); font-weight: 600; }
+.chart__sub { font-size: var(--fs-xs); color: var(--text-muted); }
+.chart__rows { display: flex; flex-direction: column; gap: var(--sp-4); margin-top: var(--sp-2); }
+.chart__row { display: flex; flex-direction: column; gap: 6px; }
+.chart__row-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--sp-3);
+}
+.chart__name {
+  font-size: var(--fs-sm); font-weight: 500;
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+}
+.chart__dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  flex-shrink: 0;
+}
+.chart__value {
+  font-family: var(--font-mono); font-size: var(--fs-sm);
+  color: var(--text-primary);
+}
+.chart__track {
+  position: relative;
+  height: 12px;
+  background: var(--bg-inset);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.chart__fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  border-radius: 999px;
+  transition: width var(--dur-base) var(--ease-out);
+}
+.chart__whisker {
+  position: relative;
+  height: 6px;
+  margin-top: 2px;
+}
+.chart__whisker-bar {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  height: 2px;
+  background: var(--text-muted);
+  border-radius: 999px;
+  opacity: 0.7;
+  transition: left var(--dur-base) var(--ease-out),
+              width var(--dur-base) var(--ease-out);
+}
+.chart__whisker-tick {
+  position: absolute;
+  top: 50%; transform: translate(-50%, -50%);
+  width: 2px; height: 6px;
+  background: var(--text-muted);
+  border-radius: 1px;
+  opacity: 0.7;
+}
+.chart__range {
+  font-size: 11px; color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-left: 6px;
+}
+.chart__empty {
+  font-size: var(--fs-sm); color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  text-align: center;
+}
+`;
+
+export function ShareChart({ shares, seatLabel, scopeLabel }: ShareChartProps) {
+  const sorted = [...shares].sort((a, b) => b.meanShare - a.meanShare);
+
+  return (
+    <>
+      <style>{styles}</style>
+      <section className="chart" aria-labelledby="chart-title">
+        <header className="chart__head">
+          <div>
+            <h2 id="chart-title" className="chart__title">
+              Simulated vote share
+            </h2>
+            <span className="chart__sub">
+              {seatLabel} · {scopeLabel}
+            </span>
+          </div>
+          <span className="chart__sub">Mean · 10–90th percentile</span>
+        </header>
+        {sorted.length === 0 ? (
+          <p className="chart__empty">No candidates to display.</p>
+        ) : (
+          <div className="chart__rows">
+            {sorted.map((s, i) => {
+              const colour = PALETTE[i % PALETTE.length];
+              const meanPct = s.meanShare * 100;
+              const p10 = Math.min(s.p10, s.p90) * 100;
+              const p90 = Math.max(s.p10, s.p90) * 100;
+              return (
+                <div className="chart__row" key={s.candidateId}>
+                  <div className="chart__row-head">
+                    <span className="chart__name">
+                      <span
+                        className="chart__dot"
+                        style={{ background: colour }}
+                        aria-hidden="true"
+                      />
+                      {s.label}
+                    </span>
+                    <span className="chart__value">
+                      {meanPct.toFixed(1)}%
+                      <span className="chart__range">
+                        ({p10.toFixed(1)}–{p90.toFixed(1)})
+                      </span>
+                    </span>
+                  </div>
+                  <div className="chart__track">
+                    <div
+                      className="chart__fill"
+                      style={{
+                        width: `${meanPct.toFixed(2)}%`,
+                        background: colour,
+                      }}
+                    />
+                  </div>
+                  <div className="chart__whisker" aria-hidden="true">
+                    <div
+                      className="chart__whisker-bar"
+                      style={{
+                        left: `${p10.toFixed(2)}%`,
+                        width: `${(p90 - p10).toFixed(2)}%`,
+                      }}
+                    />
+                    <div
+                      className="chart__whisker-tick"
+                      style={{ left: `${p10.toFixed(2)}%` }}
+                    />
+                    <div
+                      className="chart__whisker-tick"
+                      style={{ left: `${p90.toFixed(2)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
