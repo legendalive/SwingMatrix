@@ -127,7 +127,7 @@ export const TOGGLE_VARIABLES: ToggleVariable[] = [
     kind: 'toggle',
     label: 'Adverse news sentiment shock',
     description:
-      'Applies a fixed negative utility shock (−0.3) to the incumbent candidate, representing an adverse news cycle. This is a planning constant; scaling by fetched GDELT sentiment is a planned improvement.',
+      'Applies a negative utility shock to the incumbent candidate, scaled by the live GDELT news sentiment magnitude. A quiet news week produces near-zero shock; wall-to-wall adverse coverage produces the full −0.6 penalty. The News pulse panel displays the current magnitude.',
     defaultValue: false,
   },
 ];
