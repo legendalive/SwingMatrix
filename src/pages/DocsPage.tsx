@@ -158,9 +158,12 @@ export function DocsPage() {
         </p>
         <p>
           Every computation runs locally in the browser. No data is sent to a
-          server. Every World Bank indicator and every news feed is fetched
-          directly from its public source and cached for a short period to avoid
-          redundant requests while a user drags a slider.
+          server. Every World Bank indicator and every GDELT query hits its
+          public source directly from the browser, is cached in-memory for a
+          short window, and is used to seed or update the simulation inputs. The
+          app is designed so that if a data source becomes unreachable, the
+          simulation continues using documented defaults and the failure is
+          disclosed in the user interface rather than hidden.
         </p>
 
         <h2>2. What the engine computes</h2>
@@ -226,15 +229,6 @@ export function DocsPage() {
         </table>
 
         <p>
-          <strong>News and event data.</strong> GDELT DOC 2.0 (<code>api.gdeltproject.org/api/v2/doc/doc</code>)
-          is queried for English-language political coverage of Kenya in the
-          last seven days. Google News RSS (<code>news.google.com/rss</code>)
-          is used for headline discovery. When a news-based toggle is switched
-          on, the engine applies an incumbent-targeted utility shock scaled by
-          the current news sentiment.
-        </p>
-
-        <p>
           <strong>Electoral register.</strong> Registered-voter totals for the
           47 counties are taken from the IEBC 2025 gazette (national total:
           22,102,532). These weights determine how bloc-level shares are
@@ -250,7 +244,7 @@ export function DocsPage() {
         </p>
 
         <pre className="eq">
-{`U(i, c) = − Σ_d  w_d · (x(i, d) − x(c, d))²
+{`U(i, c) = − Σ_d  w_d · ((x_i,d − x_c,d) / 100)²
         + qual(c)
         + shock(i, c)`}
         </pre>
@@ -262,25 +256,34 @@ export function DocsPage() {
             adjusted by the demographic sliders.
           </li>
           <li>
-            <code>x(i, d)</code> is the ideal position of bloc <code>i</code> on
+            <code>x_i,d</code> is the ideal position of bloc <code>i</code> on
             dimension <code>d</code>. For the current MVP all blocs share a
             national ideal of 50 on every dimension; per-county ideals derived
             from DHS subnational data are a planned extension.
           </li>
           <li>
-            <code>x(c, d)</code> is the candidate's stated position on
-            dimension <code>d</code>, set by the user via the mini-sliders in
-            each candidate card.
+            <code>x_c,d</code> is the candidate's stated position on dimension
+            <code>d</code>, set by the user via the mini-sliders in each
+            candidate card.
           </li>
           <li>
             <code>qual(c)</code> aggregates the qualitative modifiers: the
-            candidate-level bias slider and the running-mate factor.
+            candidate-level bias slider, the running-mate factor, and the
+            incumbent-targeted effects.
           </li>
           <li>
-            <code>shock(i, c)</code> is a Gumbel draw with scale influenced by
-            turnout and the misinformation toggle.
+            <code>shock(i, c)</code> is a Gumbel draw whose scale is influenced
+            by turnout and the misinformation toggle.
           </li>
         </ul>
+
+        <p>
+          The salience weights are recomputed whenever a slider moves. For
+          example, raising youth unemployment increases the weight on Economy;
+          raising adult literacy increases the weight on Health &amp; Education.
+          The formula is linear in the slider values, so salience moves smoothly
+          with slider motion rather than in discontinuous jumps.
+        </p>
 
         <p>
           Individual probabilities follow the standard logit form:
@@ -290,9 +293,7 @@ export function DocsPage() {
 {`P(i, c) = exp(U(i, c)) / Σ_k exp(U(i, k))`}
         </pre>
 
-        <p>
-          The share for candidate <code>c</code> in the current scope is then:
-        </p>
+        <p>The share for candidate <code>c</code> is then:</p>
 
         <pre className="eq">
 {`share(c) = Σ_i  weight(i) · P(i, c)`}
@@ -307,15 +308,15 @@ export function DocsPage() {
           A single logit draw with a Gumbel shock is a sample from a
           distribution. A single draw tells you almost nothing. SwingMatrix runs
           500 draws per computation and reports the mean and the 10th–90th
-          percentile spread. This is why the candidate rows jitter slightly on
-          each render — that jitter is the model's intrinsic variance and should
-          not be suppressed.
+          percentile spread. The candidate rows therefore jitter slightly on
+          each render; that jitter is the model's intrinsic variance and is not
+          suppressed.
         </p>
         <p>
           The percentile band is not a confidence interval about the actual
           election. It reflects only how much variation the engine produces
           internally for the stated inputs. A tight band means the model is
-          confident in its conditional estimate. It does not mean the election
+          consistent in its conditional estimate. It does not mean the election
           will land within that band.
         </p>
 
@@ -324,22 +325,31 @@ export function DocsPage() {
           Running mates exist only for the President and Governor seats. Each
           running mate carries their own policy positions and a qualitative bias
           slider. The engine converts these into a multiplicative factor applied
-          to the principal's mean share <em>after</em> Monte Carlo and renormalised
-          across all candidates.
+          to the principal's mean share <em>after</em> Monte Carlo, then the
+          whole vector is renormalised across all candidates.
         </p>
+        <p>Two forces drive the factor:</p>
+        <ul>
+          <li>
+            A <strong>moderation bonus</strong> (40% of the factor): running
+            mates whose policy positions are close to the political centre
+            (dimension value near 50) help the ticket, reflecting the standard
+            political-science finding that balanced tickets outperform
+            ideological ones.
+          </li>
+          <li>
+            A <strong>qualitative bias</strong> (60% of the factor): the
+            running mate's likeability, name recognition, and perceived
+            competence, entered by the user as a −100 to +100 slider.
+          </li>
+        </ul>
         <p>
-          Two forces drive the factor. First, a <strong>moderation bonus</strong>:
-          running mates whose policy positions are close to the political centre
-          (dimension value near 50) help the ticket, reflecting the standard
-          political-science finding that balanced tickets outperform ideological
-          ones. Second, a <strong>qualitative bias</strong>: the running mate's
-          likeability, name recognition and perceived competence.
-        </p>
-        <p>
-          The net factor is clamped to the interval <code>[0.95, 1.05]</code>.
-          The ±5% figure is chosen because observed Kenyan running-mate effects
-          on national vote shares sit in the low single digits. It is not an
-          arbitrary ceiling; it is a bound calibrated to the historical record.
+          The net factor is computed as{" "}
+          <code>1 + combined × 0.05</code> and clamped to{" "}
+          <code>[0.95, 1.05]</code>. The ±5% figure is chosen because observed
+          Kenyan running-mate effects on national vote shares sit in the low
+          single digits. It is not an arbitrary ceiling; it is a bound
+          calibrated to the historical record.
         </p>
 
         <h2>7. The qualitative adjustment slider</h2>
@@ -347,9 +357,8 @@ export function DocsPage() {
           One slider in the Variables panel captures factors that cannot be
           statistically verified: sympathy votes, ethnic and tribal voting,
           name recognition, and general like or dislike of a candidate. This
-          slider does <strong>not</strong> touch the incumbent-targeted effects.
-          It applies only to the incumbent candidate's utility term, so a
-          negative value represents an anti-incumbent mood and a positive value
+          slider is applied <strong>only to the incumbent candidate</strong>. A
+          negative value represents an anti-incumbent mood; a positive value
           represents an incumbency advantage. Its effect is intentionally
           modest — the full −100 to +100 range produces roughly ±2 utility
           units, on the same scale as the other qualitative terms.
@@ -359,11 +368,78 @@ export function DocsPage() {
           independently and are applied per candidate.
         </p>
 
-        <h2>8. Rules and constraints</h2>
+        <h2>8. Live data behaviour</h2>
+        <p>
+          SwingMatrix fetches two classes of live data and is careful to
+          describe what it does with each.
+        </p>
+
+        <h3>World Bank bootstrap</h3>
+        <p>
+          On app load, the four World Bank indicators are fetched in parallel.
+          For each one, the latest non-null observation is taken and clamped to
+          the slider's configured range. The slider is then updated{" "}
+          <strong>only if the user has not already touched it</strong> — the
+          check is that the current value matches the documented default within
+          0.01. Sliders you have dragged keep your value; untouched sliders
+          snap to the latest World Bank figure.
+        </p>
+        <p>
+          Fetch status is surfaced in three places: the provenance footer shows
+          a green dot with the observation year per indicator; the Variables
+          panel shows a <em>Live · YYYY</em> badge on sliders that were
+          successfully seeded from the API; and the World Bank response is
+          cached in-memory for 24 hours so repeated page interactions do not
+          generate repeated API calls.
+        </p>
+        <p>
+          Failure is graceful. If the World Bank API is unreachable, the
+          slider keeps its documented default, the provenance footer shows a
+          red dot with an error tooltip, and the simulation continues normally.
+        </p>
+
+        <h3>GDELT news pulse</h3>
+        <p>
+          On first render of the results column, GDELT DOC 2.0 is queried for
+          English-language Kenya political coverage from the last seven days.
+          The response is cached for 15 minutes. Each returned headline is
+          classified as <em>adverse</em> or <em>neutral</em> by matching against
+          a pattern of terms including corruption, scandal, probe, arrest,
+          crisis, protest, violence, sack, and related vocabulary. Headlines
+          matching the pattern are marked with a red dot in the News pulse
+          panel.
+        </p>
+        <p>
+          A <strong>sentiment magnitude</strong> is computed from the fetched
+          articles as:
+        </p>
+        <pre className="eq">
+{`magnitude = (adverse articles / total articles)
+          × min(1, total articles / 15)`}
+        </pre>
+        <p>
+          This produces a value in <code>[0, 1]</code>. A quiet news week with
+          no adverse coverage yields 0; wall-to-wall adverse coverage with 15
+          or more articles yields 1. When the <em>Adverse news sentiment
+          shock</em> toggle is enabled, the engine applies{" "}
+          <code>−0.6 × magnitude</code> as a utility penalty to the incumbent
+          candidate. The shock therefore scales with reality rather than being a
+          fixed constant.
+        </p>
+        <p>
+          The News pulse panel surfaces this transparently: it shows the
+          adverse-to-total count, the computed magnitude, and the actual shock
+          value that will be applied if the toggle is switched on. If GDELT is
+          unreachable, the panel displays an error, magnitude stays at 0, and
+          the toggle applies no penalty.
+        </p>
+
+        <h2>9. Rules and constraints</h2>
         <ul>
           <li>
             <strong>Minimum two candidates.</strong> A race with one candidate
-            is not a simulation. The Remove button is disabled at two.
+            is not a simulation. The Remove button is disabled at two and a
+            note explains why.
           </li>
           <li>
             <strong>Exactly one incumbent per seat.</strong> The checkbox is a
@@ -380,13 +456,18 @@ export function DocsPage() {
             values are preserved across seat changes so a comparison across
             seats is possible without re-entering the environment.
           </li>
+          <li>
+            <strong>All computation is client-side.</strong> No data leaves the
+            browser. Caching is in-memory only and is cleared on page refresh.
+          </li>
         </ul>
 
-        <h2>9. How to use SwingMatrix</h2>
+        <h2>10. How to use SwingMatrix</h2>
         <p>
           The interface is arranged in three functional areas: the left column
           for inputs, the right column for candidate management and results, and
-          the header for scope. Read the steps below once, then explore.
+          the header for navigation between the simulator, this documentation,
+          and the disclaimer. Read the steps below once, then explore.
         </p>
 
         <ol className="steps">
@@ -404,25 +485,35 @@ export function DocsPage() {
           </li>
           <li>
             <strong>Adjust the environment.</strong> Drag any slider in the
-            Variables panel. Each slider is tagged with its World Bank indicator
-            code, or marked <em>Qualitative</em> if it has no statistical source.
-            Changes are debounced by 30 ms, so a fast drag does not produce a
-            backlog of computations.
+            Variables panel. Each slider is tagged with its World Bank
+            indicator code; those backed by a live fetch also display a{" "}
+            <em>Live · YYYY</em> badge showing the observation year currently in
+            use. Changes are debounced by 30 ms, so a fast drag does not produce
+            a backlog of computations.
           </li>
           <li>
             <strong>Toggle shocks.</strong> The Shocks panel contains four
             binary events — misinformation, incumbent corruption scandal,
-            registration drive, adverse news sentiment. Each is off by default.
-            Turning one on applies the described effect to the current
-            computation.
+            registration drive, and adverse news sentiment. Each is off by
+            default. Turning one on applies the described effect to the current
+            computation. The news-sentiment shock scales to the actual news
+            volume, so its effect on any given day depends on real coverage.
+          </li>
+          <li>
+            <strong>Read the News pulse.</strong> Above the sensitivity table
+            the panel shows the latest Kenya political headlines with
+            adverse-framing markers. Its summary row gives the adverse ratio,
+            the computed magnitude, and the actual shock value. If the panel
+            shows “Loading”, the engine has not yet received a magnitude and
+            will treat the news effect as zero until the fetch resolves.
           </li>
           <li>
             <strong>Configure candidates.</strong> Each candidate card contains
             five policy-position sliders and an Incumbent radio. For the
             President and Governor seats a running-mate sub-panel appears below
             the positions. Use <em>Add candidate</em> to add up to any number of
-            candidates; <em>Remove</em> becomes available when three or more
-            are present.
+            candidates; <em>Remove</em> becomes available when three or more are
+            present.
           </li>
           <li>
             <strong>Read the chart.</strong> The right column shows each
@@ -438,18 +529,18 @@ export function DocsPage() {
           </li>
           <li>
             <strong>Check provenance.</strong> The footer of the results column
-            lists the World Bank indicator codes in use, the active shocks, the
-            number of Monte Carlo draws, and the current scope. Cite these when
-            reporting a result.
+            lists the World Bank indicator codes in use, the year of each live
+            observation, the active shocks, the number of Monte Carlo draws, and
+            the current scope. Cite these when reporting a result.
           </li>
         </ol>
 
-        <h2>10. Known limitations</h2>
+        <h2>11. Known limitations</h2>
         <ul>
           <li>
             <strong>Voter blocs are currently county-level.</strong> Constituency
-            and ward subdivisions are modelled in the data layer but not yet in
-            the computation. A national simulation therefore aggregates 47 bloc
+            and ward subdivisions exist in the type contract but not in the
+            computation. A national simulation therefore aggregates 47 bloc
             shares, not 1,450.
           </li>
           <li>
@@ -464,15 +555,33 @@ export function DocsPage() {
             and observed magnitudes, not regression.
           </li>
           <li>
-            <strong>News sentiment is coarse.</strong> The shock toggle uses a
-            single sentiment direction rather than parsing individual headlines
-            per candidate.
+            <strong>News sentiment is coarse.</strong> The adverse-framing
+            classifier is a regular-expression pattern, not NLP-based sentiment
+            analysis. It detects the presence of adverse vocabulary, not the
+            direction or severity of sentiment. A headline that mentions
+            “corruption” in a policy-reform context may be misclassified.
+          </li>
+          <li>
+            <strong>Google News RSS is built but not yet wired.</strong> The
+            client exists and is tested; the only news source currently feeding
+            the UI is GDELT. A future version may merge both sources.
           </li>
           <li>
             <strong>Turnout is applied as a noise scale</strong>, not as a
             bloc-level propensity. A low-turnout environment widens the model's
             internal spread; it does not remove specific blocs from the
             aggregation.
+          </li>
+          <li>
+            <strong>World Bank indicators are national.</strong> The API returns
+            national series only. County-level demographic variation will
+            require DHS subnational data, which is a planned extension.
+          </li>
+          <li>
+            <strong>The corruption scandal toggle is single-dimension.</strong>{" "}
+            It lowers the incumbent's Corruption position but does not also
+            affect, for example, their perceived competence. A richer scandal
+            model is possible but not built.
           </li>
         </ul>
 
