@@ -7,14 +7,17 @@
 // plus a Gumbel random shock. Shares are produced by softmax over
 // utilities, then aggregated across blocs by registered-voter weight.
 //
-// No per-county ideal points are used at MVP. Every bloc shares the
-// national ideal (50 on each dimension) for now. Per-county ideal
-// points derived from DHS subnational data are a planned extension.
+// The news sentiment shock is scaled by the live GDELT magnitude
+// rather than a fixed constant. See bootstrapGdelt for the formula.
 // ------------------------------------------------------------------
 
 import type { SimulationState, Candidate } from '../types/simulation';
 import { POLICY_DIMENSIONS } from '../types/simulation';
 import { KENYA_COUNTIES, findCounty } from '../constants/kenya';
+import {
+  getNewsSentimentMagnitude,
+  NEWS_SHOCK_MAX,
+} from '../api/bootstrapGdelt';
 
 export interface RawShare {
   candidateId: string;
@@ -106,8 +109,13 @@ export function computeSharesOnce(state: SimulationState): RawShare[] {
 
   // Registration drive: low-information marginal voters weigh stated
   // policy positions less heavily than qualitative factors and noise.
-  // Implemented as a reduction in the position-signal contribution.
   const positionWeight = state.toggles['registration_drive'] ? 0.85 : 1.0;
+
+  // News shock: scaled by the live GDELT magnitude rather than a
+  // fixed constant. Magnitude of 0 means no adverse news effect.
+  const newsShock = state.toggles['news_sentiment_shock']
+    ? NEWS_SHOCK_MAX * getNewsSentimentMagnitude()
+    : 0;
 
   const shareByCandidate = new Map<string, number>();
   for (const c of state.candidates) shareByCandidate.set(c.id, 0);
@@ -116,8 +124,6 @@ export function computeSharesOnce(state: SimulationState): RawShare[] {
     const utilities: number[] = [];
 
     for (const ep of positions) {
-      // Position-based component (affected by policy salience and by
-      // the registration-drive position weight).
       let positionSignal = 0;
       for (const d of POLICY_DIMENSIONS) {
         const w = salience[d.id] ?? 1;
@@ -127,21 +133,17 @@ export function computeSharesOnce(state: SimulationState): RawShare[] {
 
       let signal = positionSignal * positionWeight;
 
-      // Candidate-specific qualitative bias (−2 to +2 in utility units).
       signal += ep.qualBias / 50;
 
-      // Incumbent-targeted effects: general mood and news shock.
       if (ep.id === incumbentId) {
         signal += qb / 50;
-        if (state.toggles['news_sentiment_shock']) signal -= 0.3;
+        signal -= newsShock;
       }
 
-      // Misinformation widens the stochastic envelope for all candidates.
       if (state.toggles['misinformation_campaign']) {
         signal += gumbel() * 0.4;
       }
 
-      // Standard Gumbel shock; turnout modulates its spread.
       signal += gumbel() * noiseScale;
 
       utilities.push(signal);
