@@ -1,9 +1,9 @@
 {
-  "name": "kenya-vote-simulator",
+  "name": "swingmatrix",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A simulation engine that estimates Kenyan electoral outcomes under user-defined assumptions. Not a prediction tool.",
+  "description": "SwingMatrix — a simulation engine that estimates Kenyan electoral outcomes under user-defined assumptions. Not a prediction tool.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
