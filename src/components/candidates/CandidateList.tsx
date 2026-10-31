@@ -13,6 +13,17 @@ const styles = `
 .cands__actions {
   display: flex; gap: var(--sp-2); align-items: center;
 }
+.cands__note {
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
 .btn {
   font-size: var(--fs-xs); font-weight: 500;
   padding: 6px 12px; border-radius: 8px;
@@ -55,6 +66,14 @@ export function CandidateList() {
             </button>
           </div>
         </header>
+
+        {!canRemove && (
+          <p className="cands__note">
+            At least two candidates are required to run a simulation. Add a
+            third candidate to enable removal.
+          </p>
+        )}
+
         <div className="cands" style={{ marginTop: 'var(--sp-3)' }}>
           {candidates.map(c => (
             <CandidateCard
