@@ -62,8 +62,8 @@ function blocWeights(
 
 /**
  * Build a candidate's effective policy position vector after applying
- * toggle-driven shocks. The corruption scandal toggle shifts the
- * incumbent's corruption position downward, reducing their credibility.
+ * toggle-driven shocks. The corruption scandal toggle lowers the
+ * incumbent's corruption position, reducing their credibility.
  */
 function effectivePositions(
   candidate: Candidate,
@@ -104,6 +104,11 @@ export function computeSharesOnce(state: SimulationState): RawShare[] {
   const noiseScale = 1.0 + (turnout - 63.67) / 200;
   const qb = state.sliders['qualitative_bias'] ?? 0;
 
+  // Registration drive: low-information marginal voters weigh stated
+  // policy positions less heavily than qualitative factors and noise.
+  // Implemented as a reduction in the position-signal contribution.
+  const positionWeight = state.toggles['registration_drive'] ? 0.85 : 1.0;
+
   const shareByCandidate = new Map<string, number>();
   for (const c of state.candidates) shareByCandidate.set(c.id, 0);
 
@@ -111,14 +116,16 @@ export function computeSharesOnce(state: SimulationState): RawShare[] {
     const utilities: number[] = [];
 
     for (const ep of positions) {
-      let signal = 0;
-
-      // Weighted squared distance across policy dimensions.
+      // Position-based component (affected by policy salience and by
+      // the registration-drive position weight).
+      let positionSignal = 0;
       for (const d of POLICY_DIMENSIONS) {
         const w = salience[d.id] ?? 1;
         const distance = (50 - ep.pos[d.id]) / 100; // 0–1
-        signal -= w * distance * distance * 6;
+        positionSignal -= w * distance * distance * 6;
       }
+
+      let signal = positionSignal * positionWeight;
 
       // Candidate-specific qualitative bias (−2 to +2 in utility units).
       signal += ep.qualBias / 50;
@@ -129,7 +136,7 @@ export function computeSharesOnce(state: SimulationState): RawShare[] {
         if (state.toggles['news_sentiment_shock']) signal -= 0.3;
       }
 
-      // Misinformation widens the stochastic envelope.
+      // Misinformation widens the stochastic envelope for all candidates.
       if (state.toggles['misinformation_campaign']) {
         signal += gumbel() * 0.4;
       }
