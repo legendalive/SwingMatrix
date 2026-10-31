@@ -43,5 +43,5 @@ export function SimulatorPage() {
     </>
   );
 
-  return <AppShell controlsSlot={controls} resultsSlot={resultsSlot} navSlot={null} />;
+  return <AppShell controlsSlot={controls} resultsSlot={resultsSlot} />;
 }
