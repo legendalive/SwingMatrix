@@ -11,7 +11,7 @@ function Boot() {
       <div className="app-boot__mark" aria-hidden="true">
         <span className="app-boot__dot" />
       </div>
-      <div className="app-boot__title">Kenya Vote Simulator</div>
+      <div className="app-boot__title">SwingMatrix</div>
       <div className="app-boot__hint">Simulation engine loading…</div>
     </div>
   );
