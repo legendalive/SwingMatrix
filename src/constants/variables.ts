@@ -26,7 +26,7 @@ export const SLIDER_VARIABLES: SliderVariable[] = [
     kind: 'slider',
     label: 'Adult literacy rate',
     description:
-      'Share of the population aged 15 and above who can read and write. Affects susceptibility to misinformation and news framing.',
+      'Share of the population aged 15 and above who can read and write. Affects the salience of Health & Education.',
     unit: '%',
     min: 50,
     max: 95,
@@ -68,7 +68,7 @@ export const SLIDER_VARIABLES: SliderVariable[] = [
     kind: 'slider',
     label: 'Turnout propensity',
     description:
-      'Expected share of registered voters who cast a ballot. Default is the 2022 national turnout (63.67%).',
+      'Expected share of registered voters who cast a ballot. Default is the 2022 national turnout (63.67%). Controls the spread of the internal Gumbel shock: higher turnout produces a wider distribution of outcomes.',
     unit: '%',
     min: 45,
     max: 90,
@@ -82,7 +82,7 @@ export const SLIDER_VARIABLES: SliderVariable[] = [
     kind: 'slider',
     label: 'Qualitative adjustment',
     description:
-      'Captures unverifiable factors: sympathy votes, ethnic/tribal voting, name recognition, and general like or dislike. Negative values penalise all candidates equally in the current scope; candidate-level overrides are applied on top.',
+      'Captures unverifiable factors — sympathy votes, ethnic or tribal voting, name recognition, general like or dislike. Applied to the incumbent candidate only: negative values represent anti-incumbent sentiment, positive values an incumbency advantage. Individual candidate biases are configured separately on each candidate card.',
     unit: '',
     min: -100,
     max: 100,
@@ -103,7 +103,7 @@ export const TOGGLE_VARIABLES: ToggleVariable[] = [
     kind: 'toggle',
     label: 'Misinformation campaign active',
     description:
-      'Adds noise to the utilities of lower-literacy blocs, increasing variance and benefiting the candidate with the strongest name recognition.',
+      'Adds a Gumbel shock to every candidate’s utility in every bloc, widening the percentile bands around each candidate’s share. Models an information environment in which voters’ preferences are less stable than usual.',
     defaultValue: false,
   },
   {
@@ -111,7 +111,7 @@ export const TOGGLE_VARIABLES: ToggleVariable[] = [
     kind: 'toggle',
     label: 'Incumbent corruption scandal',
     description:
-      'Shifts ideal points away from the incumbent candidate on the Corruption dimension.',
+      'Lowers the incumbent candidate’s position on the Corruption dimension by 20 points, increasing their distance from the median voter’s ideal.',
     defaultValue: false,
   },
   {
@@ -119,7 +119,7 @@ export const TOGGLE_VARIABLES: ToggleVariable[] = [
     kind: 'toggle',
     label: 'New voter registration drive',
     description:
-      'Increases effective turnout weights for blocs with historically low participation.',
+      'Increases the share of low-information marginal voters, whose candidate preferences are less strongly anchored to stated policy positions. Implemented as a 15% reduction in the weight given to policy positions relative to qualitative factors and noise.',
     defaultValue: false,
   },
   {
@@ -127,7 +127,7 @@ export const TOGGLE_VARIABLES: ToggleVariable[] = [
     kind: 'toggle',
     label: 'Adverse news sentiment shock',
     description:
-      'Applies a negative utility shock to the incumbent candidate, scaled by the latest news sentiment score.',
+      'Applies a fixed negative utility shock (−0.3) to the incumbent candidate, representing an adverse news cycle. This is a planning constant; scaling by fetched GDELT sentiment is a planned improvement.',
     defaultValue: false,
   },
 ];
