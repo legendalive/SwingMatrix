@@ -1,29 +1,17 @@
 // ------------------------------------------------------------------
-// Hierarchical geo registry loader.
+// Hierarchical geo registry loader — single-file mode.
 //
-// Supports three source modes, tried in order:
+// Reads /public/wards-2022.json, which contains the full registry
+// (47 counties, 290 constituencies, 1,450 wards) in one JSON file
+// of approximately 156 KB. Fetch once, cache in localStorage for
+// 30 days, validate, and expose synchronous accessors.
 //
-//   1. Manifest mode   — ./geo/manifest.json lists part files, which
-//                        are fetched in parallel and merged. Use this
-//                        when the ward data is split across several
-//                        files to make manual uploading manageable.
+// If the file is absent or malformed, the loader returns a
+// county-only fallback built from the existing KENYA_COUNTIES
+// constant. The app never has a moment without a registry.
 //
-//   2. Single-file mode — ./wards-2022.json contains the whole
-//                        registry. Simpler to reason about; fine for
-//                        the ~156 KB registry-only payload.
-//
-//   3. Fallback mode   — a county-only registry built from the
-//                        existing KENYA_COUNTIES constant. The app
-//                        never has a moment without a registry.
-//
-// Caching: localStorage with a 30-day freshness window. A stale
-// cache is served immediately and a background refresh kicks off
-// so the UI never blocks on the network.
-//
-// Validation is permissive: unknown or missing fields are coerced,
-// records missing required keys are dropped, and cross-reference
-// failures (a ward pointing at a missing constituency) are logged
-// to the console but do not abort the load.
+// Validation is permissive: records missing required fields are
+// dropped, cross-reference failures are logged but do not abort.
 // ------------------------------------------------------------------
 
 import { create } from 'zustand';
@@ -35,8 +23,7 @@ import type {
 } from '../types/geography';
 import { buildCountyFallback } from '../data/countyFallback';
 
-const MANIFEST_URL = './geo/manifest.json';
-const SINGLE_FILE_URL = './wards-2022.json';
+const DATA_URL = './wards-2022.json';
 const CACHE_KEY = 'swingmatrix.geoRegistry.v1';
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -80,98 +67,53 @@ export const useGeoRegistry = create<GeoRegistryStore>((set, get) => ({
   },
 }));
 
-// ---- Fetch orchestration ----
+// ---- Fetch ----
 
-interface Manifest {
-  version: number;
-  parts: string[];
-}
-
-interface PartialRegistry {
+interface RawRegistry {
   counties?: County[];
   constituencies?: Constituency[];
   wards?: Ward[];
 }
 
 async function fetchRegistry(): Promise<GeoRegistry> {
-  const manifest = await tryFetchManifest();
-  const parts = manifest
-    ? await Promise.all(manifest.parts.map(p => fetchPart(p)))
-    : [await fetchPart(SINGLE_FILE_URL)];
-
-  return mergeParts(parts);
-}
-
-async function tryFetchManifest(): Promise<Manifest | null> {
-  try {
-    const res = await fetch(MANIFEST_URL, { cache: 'no-cache' });
-    if (!res.ok) return null;
-    const raw = (await res.json()) as unknown;
-    if (typeof raw !== 'object' || raw === null) return null;
-    const obj = raw as Record<string, unknown>;
-    if (!Array.isArray(obj.parts) || obj.parts.length === 0) return null;
-    return {
-      version: typeof obj.version === 'number' ? obj.version : 1,
-      parts: obj.parts.filter((p): p is string => typeof p === 'string'),
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function fetchPart(url: string): Promise<PartialRegistry> {
-  const res = await fetch(url, { cache: 'no-cache' });
+  const res = await fetch(DATA_URL, { cache: 'no-cache' });
   if (!res.ok) {
-    throw new Error(`Geo part unavailable: ${url} (HTTP ${res.status})`);
+    throw new Error(`Ward file not available (HTTP ${res.status})`);
   }
   const raw = (await res.json()) as unknown;
   if (typeof raw !== 'object' || raw === null) {
-    throw new Error(`Geo part is not a JSON object: ${url}`);
+    throw new Error('Ward file is not a JSON object');
   }
-  const obj = raw as Record<string, unknown>;
-  return {
-    counties: Array.isArray(obj.counties) ? (obj.counties as County[]) : undefined,
-    constituencies: Array.isArray(obj.constituencies)
-      ? (obj.constituencies as Constituency[])
-      : undefined,
-    wards: Array.isArray(obj.wards) ? (obj.wards as Ward[]) : undefined,
-  };
+  const obj = raw as RawRegistry;
+  return buildRegistry(obj);
 }
 
-function mergeParts(parts: PartialRegistry[]): GeoRegistry {
-  const counties: County[] = [];
-  const constituencies: Constituency[] = [];
-  const wards: Ward[] = [];
-
-  for (const part of parts) {
-    if (part.counties) counties.push(...part.counties);
-    if (part.constituencies) constituencies.push(...part.constituencies);
-    if (part.wards) wards.push(...part.wards);
-  }
-
-  const cleanCounties = dedupeByCode(
-    counties.map(normaliseCounty).filter(isDefined)
+function buildRegistry(raw: RawRegistry): GeoRegistry {
+  const counties = dedupeByCode(
+    (raw.counties ?? []).map(normaliseCounty).filter(isDefined)
   );
-  const cleanConstituencies = dedupeByCode(
-    constituencies.map(normaliseConstituency).filter(isDefined)
+  const constituencies = dedupeByCode(
+    (raw.constituencies ?? []).map(normaliseConstituency).filter(isDefined)
   );
-  const cleanWards = dedupeByCode(wards.map(normaliseWard).filter(isDefined));
+  const wards = dedupeByCode(
+    (raw.wards ?? []).map(normaliseWard).filter(isDefined)
+  );
 
-  if (cleanConstituencies.length === 0 && cleanWards.length === 0) {
+  if (constituencies.length === 0 && wards.length === 0) {
     throw new Error('Registry contained no constituencies or wards');
   }
 
-  warnOnOrphans(cleanWards, cleanConstituencies, cleanCounties);
+  warnOnOrphans(wards, constituencies, counties);
 
-  const wardVoterTotal = cleanWards.reduce(
+  const wardVoterTotal = wards.reduce(
     (sum, w) => sum + w.registeredVoters,
     0
   );
 
   return {
-    counties: cleanCounties,
-    constituencies: cleanConstituencies,
-    wards: cleanWards,
+    counties,
+    constituencies,
+    wards,
     loadedAt: Date.now(),
     source: 'live',
     wardVoterTotal,
@@ -313,8 +255,6 @@ async function refreshInBackground() {
 }
 
 // ---- Synchronous accessors ----
-// Intended for engine and selector code once the registry has loaded.
-// Return empty arrays before load.
 
 export function getGeoRegistry(): GeoRegistry | null {
   return useGeoRegistry.getState().registry;
