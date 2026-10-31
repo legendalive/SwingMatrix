@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SLIDER_VARIABLES } from '../../constants/variables';
 import { useSimulationStore } from '../../store/simulationStore';
+import { useFetchStore } from '../../api/bootstrapWorldBank';
 import type { SliderVariable } from '../../types/simulation';
 
 const styles = `
@@ -41,7 +42,7 @@ const styles = `
 .slider-row__desc {
   font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.5;
 }
-.slider-row__tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.slider-row__tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
 .tag {
   font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
   padding: 2px 6px; border-radius: 4px;
@@ -53,6 +54,18 @@ const styles = `
   background: var(--accent-warning-soft);
   color: var(--accent-warning);
   border-color: transparent;
+}
+.tag--live {
+  background: var(--accent-success-soft);
+  color: var(--accent-success);
+  border-color: transparent;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.tag--live::before {
+  content: '';
+  width: 5px; height: 5px; border-radius: 999px;
+  background: var(--accent-success);
+  display: inline-block;
 }
 .tag--wb {
   font-family: var(--font-mono);
@@ -100,6 +113,9 @@ function SliderRow({ variable }: { variable: SliderVariable }) {
     s => s.sliders[variable.id] ?? variable.defaultValue
   );
   const setSlider = useSimulationStore(s => s.setSlider);
+  const fetchReport = useFetchStore(s =>
+    variable.worldBankCode ? s.reports[variable.worldBankCode] : undefined
+  );
   const [local, setLocal] = useState(storeValue);
 
   useEffect(() => {
@@ -118,6 +134,9 @@ function SliderRow({ variable }: { variable: SliderVariable }) {
       : local.toFixed(0)
     : `${local.toFixed(1)}${variable.unit}`;
 
+  const liveYear =
+    fetchReport && fetchReport.status === 'ok' ? fetchReport.year : undefined;
+
   return (
     <div className="slider-row">
       <div className="slider-row__head">
@@ -135,6 +154,14 @@ function SliderRow({ variable }: { variable: SliderVariable }) {
       />
       <p className="slider-row__desc">{variable.description}</p>
       <div className="slider-row__tags">
+        {liveYear !== undefined && (
+          <span
+            className="tag tag--live"
+            title={`Latest World Bank observation: ${liveYear}`}
+          >
+            Live · {liveYear}
+          </span>
+        )}
         {variable.qualitative && <span className="tag tag--qual">Qualitative</span>}
         {variable.worldBankCode && (
           <span className="tag tag--wb">{variable.worldBankCode}</span>
