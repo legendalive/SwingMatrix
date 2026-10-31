@@ -3,12 +3,6 @@ import type { ReactNode } from 'react';
 interface AppShellProps {
   controlsSlot: ReactNode;
   resultsSlot: ReactNode;
-  /**
-   * @deprecated The app header now lives in <TopNav /> rendered at the
-   * App level. This prop is accepted for backward compatibility only
-   * and is not rendered.
-   */
-  navSlot?: ReactNode;
 }
 
 const styles = `
