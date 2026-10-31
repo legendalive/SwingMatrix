@@ -35,7 +35,6 @@ const styles = `
 `;
 
 export function DataProvenance() {
-  const sliders = useSimulationStore(s => s.sliders);
   const toggles = useSimulationStore(s => s.toggles);
   const selectedSeat = useSimulationStore(s => s.selectedSeat);
   const geography = useSimulationStore(s => s.geography);
